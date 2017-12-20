@@ -1,10 +1,14 @@
 package com.moonware.cameraserver;
 
+import android.app.ActivityManager;
+import android.content.ComponentName;
 import android.content.Context;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.Console;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -27,7 +31,21 @@ import java.util.TimeZone;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 
+import android.hardware.Camera;
+import android.net.Uri;
+import android.os.Looper;
 import android.util.Log;
+
+import java.io.ByteArrayOutputStream;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.view.SurfaceView;
+import android.widget.ImageView;
 
 /**
  * A simple, tiny, nicely embeddable HTTP 1.0 (partially 1.1) server in Java
@@ -900,27 +918,121 @@ public class NanoHTTPD {
 	
 	// Image server
 
+	public void setContext(Activity cAct) {
+		Act = cAct;
+		/*  */
+	}
+
+	private Context getContext() {
+		return Act.getApplicationContext();
+
+	}
+
+	private Activity Act;
+	private byte[] jpegData = null;
+	public final static int CAMERA_REQUEST = 1888;
+private Camera myCamera;
+
+	public void takePictureNoPreview(Context context) {
+		// open back facing camera by default
+		myCamera = Camera.open();
+
+		if (myCamera != null) {
+			try {
+				//set camera parameters if you want to
+				//...
+
+				// here, the unused surface view and holder
+
+				try {
+					if (Looper.myLooper() == null) {
+						Looper.prepare();
+					}
+
+					SurfaceView dummy = new SurfaceView(Act);
+					myCamera.setPreviewDisplay(dummy.getHolder());
+					myCamera.startPreview();
+					myCamera.takePicture(null, null, getJpegCallback());
+				}
+				catch (Exception e ) {
+					Log.d("A", e.getMessage());
+				}
+
+
+			} finally {
+
+			}
+
+		} else {
+			//booo, failed!
+		}
+	}
+
+	private Camera.PictureCallback getJpegCallback(){
+		Camera.PictureCallback jpeg=new Camera.PictureCallback() {
+			@Override
+			public void onPictureTaken(byte[] data, Camera camera) {
+				FileOutputStream fos;
+				try {
+					jpegData = data;
+					fos = new FileOutputStream("live.jpeg");
+					fos.write(data);
+					fos.close();
+				}  catch (IOException e) {
+					//do something about it
+				}
+				finally {
+					myCamera.stopPreview();
+					myCamera.release();
+
+				}
+			}
+		};
+
+		return jpeg;
+	}
+
 	/**
 	 * Serves live image
 	 */
 	public Response serveJpegImage(String uri, Properties header) {
-
+		Response res = null;
 		numReq++;
-				
+
+		takePictureNoPreview(getContext());
+
+
+		//Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+		//Act.startActivityForResult(takePictureIntent, CAMERA_REQUEST);
+		/*
+		if (context instanceof Activity) {
+			Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+			((Activity) context).startActivityForResult(takePictureIntent, CAMERA_REQUEST);
+
+		} else {
+			return null;
+		}
+		*/
+
+
+
+
+		/*
 		if (CameraManager.get() == null)
 		{
 			return null;
 		}
 
-		Response res = null;
+
 
 		byte[] jpegData = CameraManager.lastFrame();
-		
+		*/
 		if (jpegData == null)
 		{
 			return null;
 		}
-				
+
+
 		InputStream is = new ByteArrayInputStream(jpegData);
 		res = new Response(HTTP_OK, MIME_DEFAULT_BINARY, is);
 
@@ -930,7 +1042,21 @@ public class NanoHTTPD {
 		// server accepts partial content requests
 		return res;
 	}
-	
+
+
+
+	public byte[] getBytes(InputStream inputStream) throws IOException {
+		ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+		int bufferSize = 1024;
+		byte[] buffer = new byte[bufferSize];
+
+		int len = 0;
+		while ((len = inputStream.read(buffer)) != -1) {
+			byteBuffer.write(buffer, 0, len);
+		}
+		return byteBuffer.toByteArray();
+	}
+
 	/**
 	 * Serves Json Info
 	 */
