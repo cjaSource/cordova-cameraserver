@@ -234,6 +234,8 @@ public class CameraServer extends CordovaPlugin {
     			server = new WebServer(port, f);
     		}
     			        
+		    		server.setContext(cordova.getActivity());
+    			        
 	        Log.w(LOGTAG, "Setting jsonInfo to: " + json_info);
 
 	        server.SetJsonInfo(json_info);
